@@ -1,14 +1,15 @@
 use std::{error::Error, fmt::{Debug, Display}};
 
-use postcard_rpc::host_client::{WireRx, WireTx};
+use postcard_rpc::host_client::{WireRx, WireSpawn, WireTx};
+use tokio::sync::mpsc::{Receiver, Sender};
 
 pub struct ProbeRttTx {
-
+    pub out: Sender<Vec<u8>>,
 }
 
 #[derive(Debug)]
 pub enum ProbeRttTxError {
-
+    Closed
 }
 
 impl Display for ProbeRttTxError {
@@ -22,7 +23,7 @@ impl Error for ProbeRttTxError {}
 
 #[derive(Debug)]
 pub enum ProbeRttRxError {
-
+    Closed
 }
 
 impl Display for ProbeRttRxError {
@@ -34,14 +35,14 @@ impl Display for ProbeRttRxError {
 impl Error for ProbeRttRxError {}
 
 pub struct ProbeRttRx {
-
+    pub inc: Receiver<Vec<u8>>,
 }
 
 impl WireTx for ProbeRttTx {
     type Error = ProbeRttTxError;
 
     async fn send(&mut self, data: Vec<u8>) -> Result<(), Self::Error> {
-        todo!()
+        self.out.send(data).await.map_err(|_| ProbeRttTxError::Closed)
     }
 }
 
@@ -49,6 +50,13 @@ impl WireRx for ProbeRttRx {
     type Error = ProbeRttRxError;
 
     async fn receive(&mut self) -> Result<Vec<u8>, Self::Error> {
-        todo!()
+        self.inc.recv().await.ok_or(ProbeRttRxError::Closed)
+    }
+}
+
+pub struct TokSpawn;
+impl WireSpawn for TokSpawn {
+    fn spawn(&mut self, fut: impl std::future::Future<Output = ()> + Send + 'static) {
+        _ = tokio::task::spawn(fut);
     }
 }

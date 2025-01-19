@@ -40,11 +40,11 @@ pub struct TaskContext {
     pub unique_id: u64,
 }
 
-/// Type Aliases
-///
-/// These aliases are used to keep the types from getting too out of hand.
-///
-/// If you are using the RP2040 - you shouldn't need to modify any of these!
+// Type Aliases
+//
+// These aliases are used to keep the types from getting too out of hand.
+//
+// If you are using the RP2040 - you shouldn't need to modify any of these!
 
 /// This alias describes the type of driver we will need. In this case, we
 /// are using the embassy-usb driver with the RP2040 USB peripheral
@@ -69,8 +69,8 @@ pub type AppServer = Server<AppTx, AppRx, WireRxBuf, MyApp>;
 
 /// Statically store our packet buffers
 pub static PBUFS: ConstStaticCell<BufStorage> = ConstStaticCell::new(BufStorage::new());
-/// Statically store our USB app buffers
-pub static STORAGE: AppStorage = AppStorage::new();
+// /// Statically store our USB app buffers
+// pub static STORAGE: AppStorage = AppStorage::new();
 
 // This macro defines your application
 define_dispatch! {

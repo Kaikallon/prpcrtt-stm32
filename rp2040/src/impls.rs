@@ -78,6 +78,9 @@ impl WireRx for RttRx {
                 // Okay, we DID have data, let's store off what we need for
                 // copying back later. We need to start copying after old used
                 // plus pos
+                //
+                // include the zero
+                let pos = pos + 1;
                 let copyback_start = *used + pos;
                 let copyback_ct = now.len() - pos;
 

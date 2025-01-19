@@ -7,7 +7,7 @@ use embassy_rp::{bind_interrupts, gpio::{Level, Output}, peripherals::USB, usb};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
 use embassy_time::{Duration, Instant, Ticker};
 use impls::{RttRx, RttTx, RttTxInner};
-use postcard_rpc::{header::VarSeq, sender_fmt, server::{Dispatch, Sender, Server}};
+use postcard_rpc::{header::VarSeq, server::{Dispatch, Sender, Server}};
 use rtt_target::rtt_init;
 use static_cell::{ConstStaticCell, StaticCell};
 use template_icd::{HelloTopic, HelloWorld};
@@ -29,7 +29,7 @@ async fn main(spawner: Spawner) {
         up: {
             0: {
                 size: 1024,
-                mode: ChannelMode::NoBlockTrim,
+                mode: ChannelMode::BlockIfFull,
                 name: "postcard-rpc uplink",
             }
         }
@@ -85,11 +85,11 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(logging_task(sender));
 
     // Begin running!
-    // loop {
-    //     // If the host disconnects, we'll return an error here.
-    //     // If this happens, just wait until the host reconnects
-    //     let _ = server.run().await;
-    // }
+    loop {
+        // If the host disconnects, we'll return an error here.
+        // If this happens, just wait until the host reconnects
+        let _ = server.run().await;
+    }
 }
 
 /// This task is a "sign of life" logger
@@ -100,7 +100,6 @@ pub async fn logging_task(sender: Sender<AppTx>) {
     let mut ctr = 0u32;
     loop {
         ticker.next().await;
-        // let _ = sender_fmt!(sender, "Uptime: {:?}", start.elapsed()).await;
         let _ = sender.publish::<HelloTopic>(VarSeq::Seq4(ctr), &HelloWorld {
             uptime: start.elapsed().as_ticks(),
         }).await;

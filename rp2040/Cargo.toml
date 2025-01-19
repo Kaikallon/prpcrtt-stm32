@@ -22,7 +22,8 @@ serde = { version = "1.0.217", default-features = false, features = ["derive"] }
 cobs = { version = "0.2.3", default-features = false }
 
 [dependencies.rtt-target]
-path = "../vendor/rtt-target/rtt-target"
+# path = "../vendor/rtt-target/rtt-target"
+version = "0.6.1"
 
 [profile.release]
 debug = 2
