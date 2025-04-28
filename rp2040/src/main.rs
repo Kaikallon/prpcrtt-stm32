@@ -3,7 +3,6 @@
 
 use app::AppTx;
 use embassy_executor::Spawner;
-use embassy_rp::{bind_interrupts, gpio::{Level, Output}, peripherals::USB, usb};
 use embassy_sync::{blocking_mutex::raw::ThreadModeRawMutex, mutex::Mutex};
 use embassy_time::{Duration, Instant, Ticker};
 use impls::{RttRx, RttTx, RttTxInner};
@@ -11,10 +10,7 @@ use postcard_rpc::{header::VarSeq, server::{Dispatch, Sender, Server}};
 use rtt_target::rtt_init;
 use static_cell::{ConstStaticCell, StaticCell};
 use template_icd::{HelloTopic, HelloWorld};
-
-bind_interrupts!(pub struct Irqs {
-    USBCTRL_IRQ => usb::InterruptHandler<USB>;
-});
+use embassy_stm32::gpio::{Output, Level, Speed};
 
 use {panic_reset as _};
 
@@ -42,13 +38,12 @@ async fn main(spawner: Spawner) {
     };
 
     // SYSTEM INIT
-    let mut p = embassy_rp::init(Default::default());
+    let mut p = embassy_stm32::init(Default::default());
     // Obtain the flash ID
-    let unique_id = unique_id::get_unique_id(&mut p.FLASH).unwrap();
+    let unique_id = 123456789 as u64;
 
-    // USB/RPC INIT
     let pbufs = app::PBUFS.take();
-    let led = Output::new(p.PIN_25, Level::Low);
+    let led = Output::new(p.PC0, Level::Low, Speed::Low);
 
     let context = app::Context { unique_id, led };
 
@@ -104,25 +99,5 @@ pub async fn logging_task(sender: Sender<AppTx>) {
             uptime: start.elapsed().as_ticks(),
         }).await;
         ctr += 1;
-    }
-}
-
-/// Helper to get unique ID from flash
-mod unique_id {
-    use embassy_rp::{
-        flash::{Blocking, Flash},
-        peripherals::FLASH,
-    };
-
-    /// This function retrieves the unique ID of the external flash memory.
-    ///
-    /// The RP2040 has no internal unique ID register, but most flash chips do,
-    /// So we use that instead.
-    pub fn get_unique_id(flash: &mut FLASH) -> Option<u64> {
-        let mut flash: Flash<'_, FLASH, Blocking, { 16 * 1024 * 1024 }> =
-            Flash::new_blocking(flash);
-        let mut id = [0u8; core::mem::size_of::<u64>()];
-        flash.blocking_unique_id(&mut id).ok()?;
-        Some(u64::from_be_bytes(id))
     }
 }

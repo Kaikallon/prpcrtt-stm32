@@ -1,13 +1,22 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-# If you have an SWD debugger, you can uncomment this line:
-runner = "probe-rs run --chip RP2040 --speed 12000 --protocol swd"
+# replace STM32G071C8Rx with your chip as listed in `probe-rs chip list`
+runner = [
+    "probe-rs",
+    "run",
+    "--chip",
+    "STM32G431CBTx",
+    "--speed",
+    "5000",
+    "--preverify",
+    "--rtt-scan-memory",
+    "--log-format",
+    "{t} [{L}] {s}",
 
-# If you don't, you can put the pico into the USB loader, and use this
-# line instead:
-# runner = "picotool load -x -t elf"
+]
+rustflags = [ "-C", "link-arg=--threads=1" ]
 
 [build]
-target = "thumbv6m-none-eabi"        # Cortex-M0 and Cortex-M0+
+target = "thumbv7em-none-eabihf"
 
 [env]
 DEFMT_LOG = "debug"

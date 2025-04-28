@@ -1,21 +1,21 @@
 //! A basic postcard-rpc/poststation-compatible application
 
-use crate::{handlers::{get_led, picoboot_reset, set_led, sleep_handler, unique_id}, impls::{RttRx, RttTx}};
-use embassy_rp::{gpio::Output, peripherals::USB, usb};
+use crate::{handlers::{get_led, set_led, sleep_handler, unique_id}, impls::{RttRx, RttTx}};
+use embassy_stm32::gpio::Output;
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
-use postcard_rpc::server::impls::embassy_usb_v0_3::{
-    dispatch_impl::{spawn_fn, WireRxBuf, WireSpawnImpl, WireStorage},
-    PacketBuffers,
-};
+use embassy_executor::{SpawnError, SpawnToken, Spawner};
+
 use postcard_rpc::{
     define_dispatch,
-    server::{Server, SpawnContext},
+    server::{Server, SpawnContext, WireSpawn},
 };
 use static_cell::ConstStaticCell;
 use template_icd::{
     GetLedEndpoint, GetUniqueIdEndpoint, RebootToPicoBoot, SetLedEndpoint, SleepEndpoint,
 };
 use template_icd::{ENDPOINT_LIST, TOPICS_IN_LIST, TOPICS_OUT_LIST};
+
+pub type WireRxBuf = &'static mut [u8];
 
 /// Context contains the data that we will pass (as a mutable reference)
 /// to each endpoint or topic handler
@@ -43,20 +43,7 @@ pub struct TaskContext {
 // Type Aliases
 //
 // These aliases are used to keep the types from getting too out of hand.
-//
-// If you are using the RP2040 - you shouldn't need to modify any of these!
 
-/// This alias describes the type of driver we will need. In this case, we
-/// are using the embassy-usb driver with the RP2040 USB peripheral
-pub type AppDriver = usb::Driver<'static, USB>;
-/// Storage describes the things we need to keep as a static, so it can be shared
-/// with anyone who needs to send messages.
-///
-/// We can accept any mutex (this is using the thread-mode mutex, meaning that
-/// it will work outside of interrupts or interrupt executors). The numeric
-/// items control the buffer sizes allocated for Config, BOS, Control, and
-/// MSOS USB buffers. See embassy-usb for more details on this.
-pub type AppStorage = WireStorage<ThreadModeRawMutex, AppDriver, 256, 256, 64, 256>;
 /// BufStorage is the space used for receiving and sending frames. These values
 /// control the largest frames we can send or receive.
 pub type BufStorage = PacketBuffers<1024, 1024>;
@@ -69,8 +56,6 @@ pub type AppServer = Server<AppTx, AppRx, WireRxBuf, MyApp>;
 
 /// Statically store our packet buffers
 pub static PBUFS: ConstStaticCell<BufStorage> = ConstStaticCell::new(BufStorage::new());
-// /// Statically store our USB app buffers
-// pub static STORAGE: AppStorage = AppStorage::new();
 
 // This macro defines your application
 define_dispatch! {
@@ -80,11 +65,11 @@ define_dispatch! {
     app: MyApp;
     // This chooses how we spawn functions. Here, we use the implementation
     // from the `embassy_usb_v0_3` implementation
-    spawn_fn: spawn_fn;
+    spawn_fn: embassy_spawn;
     // This is our TX impl, which we aliased above
     tx_impl: AppTx;
     // This is our spawn impl, which also comes from `embassy_usb_v0_3`.
-    spawn_impl: WireSpawnImpl;
+    spawn_impl: EUsbWireSpawn;
     // This is the context type we defined above
     context: Context;
 
@@ -108,7 +93,7 @@ define_dispatch! {
         | EndpointTy                | kind      | handler                       |
         | ----------                | ----      | -------                       |
         | GetUniqueIdEndpoint       | blocking  | unique_id                     |
-        | RebootToPicoBoot          | blocking  | picoboot_reset                |
+        // | RebootToPicoBoot          | blocking  | picoboot_reset                |
         | SleepEndpoint             | spawn     | sleep_handler                 |
         | SetLedEndpoint            | blocking  | set_led                       |
         | GetLedEndpoint            | blocking  | get_led                       |
@@ -132,4 +117,59 @@ define_dispatch! {
         // This list comes from our ICD crate.
         list: TOPICS_OUT_LIST;
     };
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// SPAWN
+//////////////////////////////////////////////////////////////////////////////
+
+/// A [`WireSpawn`] impl using the embassy executor
+#[derive(Clone)]
+pub struct EUsbWireSpawn {
+    /// The embassy-executor spawner
+    pub spawner: Spawner,
+}
+
+impl From<Spawner> for EUsbWireSpawn {
+    fn from(value: Spawner) -> Self {
+        Self { spawner: value }
+    }
+}
+
+impl WireSpawn for EUsbWireSpawn {
+    type Error = SpawnError;
+
+    type Info = Spawner;
+
+    fn info(&self) -> &Self::Info {
+        &self.spawner
+    }
+}
+
+/// Attempt to spawn the given token
+pub fn embassy_spawn<Sp, S: Sized>(sp: &Sp, tok: SpawnToken<S>) -> Result<(), Sp::Error>
+where
+    Sp: WireSpawn<Error = SpawnError, Info = Spawner>,
+{
+    let info = sp.info();
+    info.spawn(tok)
+}
+
+
+/// Static storage for generically sized input and output packet buffers
+pub struct PacketBuffers<const TX: usize = 1024, const RX: usize = 1024> {
+    /// the transmit buffer
+    pub tx_buf: [u8; TX],
+    /// thereceive buffer
+    pub rx_buf: [u8; RX],
+}
+
+impl<const TX: usize, const RX: usize> PacketBuffers<TX, RX> {
+    /// Create new empty buffers
+    pub const fn new() -> Self {
+        Self {
+            tx_buf: [0u8; TX],
+            rx_buf: [0u8; RX],
+        }
+    }
 }
