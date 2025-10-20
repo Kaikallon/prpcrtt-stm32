@@ -7,7 +7,7 @@ edition = "2021"
 # cortex-m                = { version = "0.7.6", features = ["inline-asm"] }
 cortex-m                = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
 
-embassy-executor        = { version = "0.6.0", features = ["task-arena-size-16384", "arch-cortex-m", "executor-thread", "executor-interrupt", "integrated-timers"] }
+embassy-executor        = { version = "0.6.0", features = ["task-arena-size-8192", "arch-cortex-m", "executor-thread", "executor-interrupt", "integrated-timers"] }
 embassy-stm32           = { version = "0.1.0", features = [ "time-driver-any", "stm32g431cb", "memory-x", "unstable-pac", "exti"]  }
 embassy-sync            = { version = "0.6.2", features = [] }
 embassy-time            = { version = "0.3.2", features = [] }

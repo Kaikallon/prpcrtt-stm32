@@ -5,7 +5,7 @@ use std::{
 
 use cobs::{decode_vec, encode_vec};
 use impls::{ProbeRttRx, ProbeRttTx, TokSpawn};
-use postcard_rpc::{header::VarSeqKind, host_client::HostClient, standard_icd::{PingEndpoint, WireError}};
+use postcard_rpc::{header::VarSeqKind, host_client::{HostClient, RawMultiSubscription, TopicReport}, standard_icd::{PingEndpoint, WireError}};
 use probe_rs::{
     config::TargetSelector,
     probe::list::Lister,
@@ -14,6 +14,7 @@ use probe_rs::{
 };
 use template_icd::HelloTopic;
 use tokio::{sync::mpsc, time::{sleep, timeout}};
+use postcard_dyn;
 
 pub mod impls;
 
@@ -26,13 +27,14 @@ async fn main() {
     }
     let probe = probes[0].open().unwrap();
     let mut session = probe
-        .attach(TargetSelector::from("RP2040"), Permissions::default())
+        .attach(TargetSelector::from("STM32G431VBTx"), Permissions::default())
         .unwrap();
     let rtt = {
         let mut core = session.core(0).unwrap();
 
         eprintln!("Attaching to RTT...");
 
+        // let mut rtt = Rtt::attach_region(&mut core, &ScanRegion::Ranges(vec![Range{start: 0x20000000, end: 0x20008000}])).unwrap();
         let mut rtt = Rtt::attach_region(&mut core, &ScanRegion::Ram).unwrap();
         eprintln!("Found control block at {:#010x}", rtt.ptr());
 
@@ -70,21 +72,21 @@ async fn main() {
         }
     });
 
-    for i in 0..3 {
-        let res = timeout(Duration::from_secs(1), client.send_resp::<PingEndpoint>(&i)).await;
-        match res {
-            Ok(r) => {
-                let got = r.unwrap();
-                assert_eq!(got, i);
-                println!("ping :)");
-            },
-            Err(_) => {
-                println!("Timeout :(");
-            }
-        }
+    // for i in 0..3 {
+    //     let res = timeout(Duration::from_secs(1), client.send_resp::<PingEndpoint>(&i)).await;
+    //     match res {
+    //         Ok(r) => {
+    //             let got = r.unwrap();
+    //             assert_eq!(got, i);
+    //             println!("ping :)");
+    //         },
+    //         Err(_) => {
+    //             println!("Timeout :(");
+    //         }
+    //     }
 
-        sleep(Duration::from_secs(1)).await;
-    }
+    //     sleep(Duration::from_secs(1)).await;
+    // }
 
     println!("Attempting schema discovery:");
     let res = client.get_schema_report().await.unwrap();
@@ -103,14 +105,41 @@ async fn main() {
     println!();
     println!("# Topics Out");
     println!();
+
+    // Subscribe to all outgoing topics
+    let mut handles = vec![];
     for to in res.topics_out {
         println!("'{}': ->  {}", to.path, to.ty.to_pseudocode());
+        let subscription = client.subscribe_multi_raw(to.key, 64).await.unwrap();
+        let handle = tokio::spawn(async move {
+            process_subscription(subscription, &to).await;
+        });
+        handles.push(handle);
     }
+
     println!();
     println!("# Topics In");
     println!();
     for ti in res.topics_in {
         println!("'{}': <-  {}", ti.path, ti.ty.to_pseudocode());
+    }
+
+    // Sleep for a while to allow some time to receive topic messages
+    sleep(Duration::from_secs(10)).await;
+}
+
+async fn process_subscription(mut subscription: RawMultiSubscription, topic_report: &TopicReport) {
+    println!("Topic processor started: {}", topic_report.path);
+    loop {
+        let frame = subscription.recv().await.unwrap();
+        println!("Frame bytes: {}", frame.to_bytes().iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" "));
+
+        // let decoded = decode_vec(&frame.body).unwrap();
+        let frame_bytes = frame.to_bytes();
+
+        let value = postcard_dyn::from_slice_dyn(&topic_report.ty, &frame_bytes).unwrap();
+        println!("Topic {}: {:?}", topic_report.ty.name, value);
+        println!("");
     }
 }
 

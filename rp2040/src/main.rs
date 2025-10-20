@@ -90,14 +90,12 @@ async fn main(spawner: Spawner) {
 /// This task is a "sign of life" logger
 #[embassy_executor::task]
 pub async fn logging_task(sender: Sender<AppTx>) {
-    let mut ticker = Ticker::every(Duration::from_secs(3));
+    let mut ticker = Ticker::every(Duration::from_millis(300));
     let start = Instant::now();
     let mut ctr = 0u32;
     loop {
         ticker.next().await;
-        let _ = sender.publish::<HelloTopic>(VarSeq::Seq4(ctr), &HelloWorld {
-            uptime: start.elapsed().as_ticks(),
-        }).await;
+        let _ = sender.publish::<HelloTopic>(VarSeq::Seq4(ctr), &((ctr * 10) as u64)).await;
         ctr += 1;
     }
 }

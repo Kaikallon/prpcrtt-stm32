@@ -55,5 +55,5 @@ topics! {
     direction = TopicDirection::ToClient;
     | TopicTy                   | MessageTy     | Path              | Cfg                           |
     | -------                   | ---------     | ----              | ---                           |
-    | HelloTopic                | HelloWorld    | "hello"           |                               |
+    | HelloTopic                | u64    | "hello"           |                               |
 }
