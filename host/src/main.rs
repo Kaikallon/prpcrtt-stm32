@@ -5,7 +5,7 @@ use std::{
 
 use cobs::{decode_vec, encode_vec};
 use impls::{ProbeRttRx, ProbeRttTx, TokSpawn};
-use postcard_rpc::{header::VarSeqKind, host_client::{HostClient, RawMultiSubscription, TopicReport}, standard_icd::{PingEndpoint, WireError}};
+use postcard_rpc::{header::VarSeqKind, header::VarHeader, host_client::{HostClient, RawMultiSubscription, RawSubscription, TopicReport}, standard_icd::{PingEndpoint, WireError}};
 use probe_rs::{
     config::TargetSelector,
     probe::list::Lister,
@@ -31,6 +31,9 @@ async fn main() {
         .unwrap();
     let rtt = {
         let mut core = session.core(0).unwrap();
+
+    core.reset().unwrap();
+        sleep(Duration::from_millis(1500)).await;
 
         eprintln!("Attaching to RTT...");
 
@@ -110,7 +113,7 @@ async fn main() {
     let mut handles = vec![];
     for to in res.topics_out {
         println!("'{}': ->  {}", to.path, to.ty.to_pseudocode());
-        let subscription = client.subscribe_multi_raw(to.key, 64).await.unwrap();
+        let subscription = client.subscribe_raw(to.key, 64).await.unwrap();
         let handle = tokio::spawn(async move {
             process_subscription(subscription, &to).await;
         });
@@ -128,7 +131,7 @@ async fn main() {
     sleep(Duration::from_secs(10)).await;
 }
 
-async fn process_subscription(mut subscription: RawMultiSubscription, topic_report: &TopicReport) {
+async fn process_subscription(mut subscription: RawSubscription, topic_report: &TopicReport) {
     println!("Topic processor started: {}", topic_report.path);
     loop {
         let frame = subscription.recv().await.unwrap();
@@ -136,10 +139,10 @@ async fn process_subscription(mut subscription: RawMultiSubscription, topic_repo
 
         // let decoded = decode_vec(&frame.body).unwrap();
         let frame_bytes = frame.to_bytes();
+        let (header, message_bytes) = VarHeader::take_from_slice(&frame_bytes).unwrap();
 
-        let value = postcard_dyn::from_slice_dyn(&topic_report.ty, &frame_bytes).unwrap();
+        let value = postcard_dyn::from_slice_dyn(&topic_report.ty, &message_bytes).unwrap();
         println!("Topic {}: {:?}", topic_report.ty.name, value);
-        println!("");
     }
 }
 
