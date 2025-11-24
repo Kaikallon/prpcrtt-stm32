@@ -1337,9 +1337,8 @@ dependencies = [
 
 [[package]]
 name = "postcard-rpc"
-version = "0.11.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e95207d958aa62466faa3357890047caeb69c4bf50d6f17478cc4ea92374cfc"
+version = "0.11.15"
+source = "git+https://github.com/WattStep/postcard-rpc.git?branch=increase_timeout_0_11_5#26e504ff0bae384b9ff19495730aab39a44b5e57"
 dependencies = [
  "heapless 0.8.0",
  "maitake-sync",
@@ -1348,7 +1347,7 @@ dependencies = [
  "postcard-schema",
  "serde",
  "ssmarshal",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
  "trait-variant",
